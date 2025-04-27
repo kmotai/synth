@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2VCO Synth with Pitch Undulation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .control-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .control-group h3 {
+            margin-top: 0;
+            color: #2980b9;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 140px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:active {
+            background-color: #1c638d;
+        }
+        button.stop {
+            background-color: #e74c3c;
+        }
+        button.stop:hover {
+            background-color: #c0392b;
+        }
+        select {
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+        }
+        .waveform-container {
+            position: relative;
+            width: 100%;
+            height: 150px;
+            background-color: #ecf0f1;
+            margin-top: 20px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .status {
+            text-align: center;
+            font-weight: bold;
+            margin-top: 10px;
+            color: #2980b9;
+        }
+        .debug-info {
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 5px;
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            overflow: auto;
+            max-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>2VCO Synth with Pitch Undulation</h1>
+        
+        <div class="control-group">
+            <h3>基本操作</h3>
+            <div class="control-row">
+                <button id="startButton">Start</button>
+                <button id="stopButton" class="stop">Stop</button>
+            </div>
+            <div id="status" class="status">停止中</div>
+        </div>
+        
+        <div class="control-group">
+            <h3>オシレーター設定</h3>
+            <div class="control-row">
+                <label for="waveformSelect">波形:</label>
+                <select id="waveformSelect">
+                    <option value="sawtooth">のこぎり波 (Sawtooth)</option>
+                    <option value="sine">サイン波 (Sine)</option>
+                    <option value="square">矩形波 (Square)</option>
+                    <option value="triangle">三角波 (Triangle)</option>
+                </select>
+            </div>
+            <div class="control-row">
+                <label for="pitchSlider">ピッチ (Hz):</label>
+                <input type="range" id="pitchSlider" min="50" max="1000" step="1" value="220">
+                <span id="pitchValue" class="value-display">220 Hz</span>
+            </div>
+            <div class="control-row">
+                <label for="detuneSlider">デチューン (cents):</label>
+                <input type="range" id="detuneSlider" min="0" max="50" step="1" value="10">
+                <span id="detuneValue" class="value-display">10 cents</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>ピッチうねり設定</h3>
+            <div class="control-row">
+                <label for="depthSlider">うねり幅 (cents):</label>
+                <input type="range" id="depthSlider" min="0" max="300" step="1" value="150">
+                <span id="depthValue" class="value-display">150 cents</span>
+            </div>
+            <div class="control-row">
+                <label for="frequencySlider">うねり速度 (Hz):</label>
+                <input type="range" id="frequencySlider" min="0.1" max="10" step="0.1" value="0.5">
+                <span id="frequencyValue" class="value-display">0.5 Hz</span>
+            </div>
+            <div class="control-row">
+                <label for="cycleTimeSlider">周期時間 (秒):</label>
+                <input type="range" id="cycleTimeSlider" min="1" max="20" step="1" value="10">
+                <span id="cycleTimeValue" class="value-display">10 秒</span>
+            </div>
+            <div class="control-row">
+                <button id="applyUndulationButton">うねり設定を適用</button>
+            </div>
+        </div>
+        
+        <div class="control-group" style="display: none;">
+            <h3>エンベロープ設定 (オプション)</h3>
+            <div class="control-row">
+                <label for="attackSlider">アタック (秒):</label>
+                <input type="range" id="attackSlider" min="0.01" max="2" step="0.01" value="0.1">
+                <span id="attackValue" class="value-display">0.1 秒</span>
+            </div>
+            <div class="control-row">
+                <label for="releaseSlider">リリース (秒):</label>
+                <input type="range" id="releaseSlider" min="0.01" max="5" step="0.01" value="0.5">
+                <span id="releaseValue" class="value-display">0.5 秒</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>フィルター設定 (オプション)</h3>
+            <div class="control-row">
+                <label for="filterEnableCheckbox">フィルター有効:</label>
+                <input type="checkbox" id="filterEnableCheckbox">
+            </div>
+            <div class="control-row">
+                <label for="filterFreqSlider">カットオフ周波数:</label>
+                <input type="range" id="filterFreqSlider" min="100" max="10000" step="1" value="1000">
+                <span id="filterFreqValue" class="value-display">1000 Hz</span>
+            </div>
+            <div class="control-row">
+                <label for="filterQSlider">レゾナンス (Q):</label>
+                <input type="range" id="filterQSlider" min="0.1" max="20" step="0.1" value="1">
+                <span id="filterQValue" class="value-display">1.0</span>
+            </div>
+        </div>
+        
+        <div class="waveform-container">
+            <canvas id="waveformCanvas"></canvas>
+        </div>
+        
+        <div id="debugInfo" class="debug-info"></div>
+    </div>
+
+    <script>
+        // オーディオコンテキストと変数の初期化
+        let audioContext;
+        let oscillator1, oscillator2;
+        let gainNode;
+        let filter;
+        let animationFrameId;
+        let lfoNode; // LFO用オシレーター
+        let startTime;
+        let isPlaying = false;
+        let statusDisplay = document.getElementById('status');
+        let debugInfo = document.getElementById('debugInfo');
+
+        // UIエレメントの取得
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const waveformSelect = document.getElementById('waveformSelect');
+        const pitchSlider = document.getElementById('pitchSlider');
+        const pitchValue = document.getElementById('pitchValue');
+        const detuneSlider = document.getElementById('detuneSlider');
+        const detuneValue = document.getElementById('detuneValue');
+        const depthSlider = document.getElementById('depthSlider');
+        const depthValue = document.getElementById('depthValue');
+        const frequencySlider = document.getElementById('frequencySlider');
+        const frequencyValue = document.getElementById('frequencyValue');
+        const cycleTimeSlider = document.getElementById('cycleTimeSlider');
+        const cycleTimeValue = document.getElementById('cycleTimeValue');
+        const attackSlider = document.getElementById('attackSlider');
+        const attackValue = document.getElementById('attackValue');
+        const releaseSlider = document.getElementById('releaseSlider');
+        const releaseValue = document.getElementById('releaseValue');
+        const filterEnableCheckbox = document.getElementById('filterEnableCheckbox');
+        const filterFreqSlider = document.getElementById('filterFreqSlider');
+        const filterFreqValue = document.getElementById('filterFreqValue');
+        const filterQSlider = document.getElementById('filterQSlider');
+        const filterQValue = document.getElementById('filterQValue');
+        const waveformCanvas = document.getElementById('waveformCanvas');
+        const canvasCtx = waveformCanvas.getContext('2d');
+        const applyUndulationButton = document.getElementById('applyUndulationButton');
+
+        // 値表示の更新
+        function updateValueDisplays() {
+            pitchValue.textContent = `${pitchSlider.value} Hz`;
+            detuneValue.textContent = `${detuneSlider.value} cents`;
+            depthValue.textContent = `${depthSlider.value} cents`;
+            frequencyValue.textContent = `${frequencySlider.value} Hz`;
+            cycleTimeValue.textContent = `${cycleTimeSlider.value} 秒`;
+            attackValue.textContent = `${attackSlider.value} 秒`;
+            releaseValue.textContent = `${releaseSlider.value} 秒`;
+            filterFreqValue.textContent = `${filterFreqSlider.value} Hz`;
+            filterQValue.textContent = filterQSlider.value;
+        }
+
+        function logDebug(message) {
+            debugInfo.textContent += message + "\n";
+            if (debugInfo.textContent.split("\n").length > 10) {
+                const lines = debugInfo.textContent.split("\n");
+                debugInfo.textContent = lines.slice(lines.length - 10).join("\n");
+            }
+            console.log(message);
+        }
+
+        // スライダーイベントリスナー
+        pitchSlider.addEventListener('input', function() {
+            updateValueDisplays();
+            if (isPlaying) {
+                const pitch = parseFloat(this.value);
+                oscillator1.frequency.setValueAtTime(pitch, audioContext.currentTime);
+                oscillator2.frequency.setValueAtTime(pitch, audioContext.currentTime);
+            }
+        });
+
+        detuneSlider.addEventListener('input', function() {
+            updateValueDisplays();
+            if (isPlaying) {
+                // オシレーター2のデチューン値を直接更新
+                const detuneValue = parseFloat(this.value);
+                oscillator2.detune.setValueAtTime(detuneValue, audioContext.currentTime);
+            }
+        });
+
+        // その他のスライダーイベントリスナー
+        depthSlider.addEventListener('input', updateValueDisplays);
+        frequencySlider.addEventListener('input', updateValueDisplays);
+        cycleTimeSlider.addEventListener('input', updateValueDisplays);
+        attackSlider.addEventListener('input', updateValueDisplays);
+        releaseSlider.addEventListener('input', updateValueDisplays);
+        
+        // うねり設定を適用するボタン
+        applyUndulationButton.addEventListener('click', function() {
+            if (isPlaying) {
+                setupLFO();
+                logDebug("うねり設定を適用しました");
+            }
+        });
+        
+        filterFreqSlider.addEventListener('input', function() {
+            updateValueDisplays();
+            if (isPlaying && filterEnableCheckbox.checked) {
+                filter.frequency.setValueAtTime(parseFloat(filterFreqSlider.value), audioContext.currentTime);
+            }
+        });
+        
+        filterQSlider.addEventListener('input', function() {
+            updateValueDisplays();
+            if (isPlaying && filterEnableCheckbox.checked) {
+                filter.Q.setValueAtTime(parseFloat(filterQSlider.value), audioContext.currentTime);
+            }
+        });
+
+        filterEnableCheckbox.addEventListener('change', function() {
+            if (isPlaying) {
+                if (this.checked) {
+                    // フィルターを有効化
+                    gainNode.disconnect();
+                    gainNode.connect(filter);
+                    filter.connect(audioContext.destination);
+                    filter.frequency.setValueAtTime(parseFloat(filterFreqSlider.value), audioContext.currentTime);
+                    filter.Q.setValueAtTime(parseFloat(filterQSlider.value), audioContext.currentTime);
+                } else {
+                    // フィルターを無効化
+                    gainNode.disconnect();
+                    gainNode.connect(audioContext.destination);
+                }
+            }
+        });
+
+        waveformSelect.addEventListener('change', function() {
+            if (isPlaying) {
+                oscillator1.type = this.value;
+                oscillator2.type = this.value;
+            }
+        });
+
+        // LFOを設定する関数（ピッチうねり用）
+        function setupLFO() {
+            if (!isPlaying) return;
+            
+            // 既存のLFOがあれば停止
+            if (lfoNode) {
+                lfoNode.stop();
+                lfoNode.disconnect();
+            }
+            
+            // LFO用のオシレーター作成
+            lfoNode = audioContext.createOscillator();
+            lfoNode.type = 'sine';
+            lfoNode.frequency.value = parseFloat(frequencySlider.value);
+            
+            // LFOのゲインノード（振幅調整用）
+            const lfoGain = audioContext.createGain();
+            lfoGain.gain.value = parseFloat(depthSlider.value);  // セント単位での振幅
+            
+            // LFOを接続
+            lfoNode.connect(lfoGain);
+            
+            // LFOをオシレーターのdetune値に接続
+            lfoGain.connect(oscillator1.detune);
+            lfoGain.connect(oscillator2.detune);
+            
+            // うねりの周期に基づく変化をスケジュール
+            const cycleTime = parseFloat(cycleTimeSlider.value);
+            const now = audioContext.currentTime;
+            
+            // 深さを時間とともに減少させる
+            lfoGain.gain.setValueAtTime(parseFloat(depthSlider.value), now);
+            lfoGain.gain.linearRampToValueAtTime(0, now + cycleTime);
+            
+            // 周波数を時間とともに増加させる
+            lfoNode.frequency.setValueAtTime(parseFloat(frequencySlider.value), now);
+            lfoNode.frequency.linearRampToValueAtTime(5, now + cycleTime);
+            
+            // LFOを開始
+            lfoNode.start();
+            
+            logDebug(`LFO設定: 深さ=${depthSlider.value}cents, 速度=${frequencySlider.value}Hz, 周期=${cycleTimeSlider.value}秒`);
+            
+            // 周期が経過したら再度設定
+            setTimeout(() => {
+                if (isPlaying) {
+                    setupLFO();
+                }
+            }, cycleTime * 1000);
+        }
+
+        // 波形の描画
+        function drawWaveform() {
+            if (!isPlaying) return;
+            
+            const width = waveformCanvas.width;
+            const height = waveformCanvas.height;
+            
+            canvasCtx.clearRect(0, 0, width, height);
+            
+            // 現在時刻とパラメータ
+            const elapsedTime = audioContext.currentTime - startTime;
+            const cycleTime = parseFloat(cycleTimeSlider.value);
+            const cyclePosition = (elapsedTime % cycleTime) / cycleTime;
+            
+            // 現在のうねり深さとスピード
+            const startDepth = parseFloat(depthSlider.value);
+            const endDepth = 0;
+            const startFreq = parseFloat(frequencySlider.value);
+            const endFreq = 5;
+            
+            const currentDepth = startDepth * (1 - cyclePosition) + endDepth * cyclePosition;
+            const currentFreq = startFreq * (1 - cyclePosition) + endFreq * cyclePosition;
+            
+            // うねりの可視化（青線）
+            canvasCtx.beginPath();
+            for (let x = 0; x < width; x++) {
+                const time = x / width * 2;  // 2秒分の波形を表示
+                const amplitude = currentDepth / 150 * height / 4;
+                const y = height / 2 + Math.sin(2 * Math.PI * currentFreq * time + elapsedTime * 10) * amplitude;
+                
+                if (x === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+            }
+            
+            canvasCtx.strokeStyle = '#3498db';
+            canvasCtx.lineWidth = 2;
+            canvasCtx.stroke();
+            
+            // オシレーターの波形も描画（赤線）
+            canvasCtx.beginPath();
+            const pitch = parseFloat(pitchSlider.value);
+            
+            for (let x = 0; x < width; x++) {
+                const time = x / width * 0.01;  // 0.01秒分の波形を表示（高周波数確認用）
+                let y;
+                
+                if (waveformSelect.value === 'sine') {
+                    y = height / 2 + Math.sin(2 * Math.PI * pitch * time) * height / 4;
+                } else if (waveformSelect.value === 'square') {
+                    y = height / 2 + (((pitch * time) % 1) < 0.5 ? 1 : -1) * height / 4;
+                } else if (waveformSelect.value === 'sawtooth') {
+                    y = height / 2 + (((pitch * time) % 1) * 2 - 1) * height / 4;
+                } else { // triangle
+                    const pos = ((pitch * time) % 1);
+                    y = height / 2 + (pos < 0.5 ? pos * 4 - 1 : 3 - pos * 4) * height / 4;
+                }
+                
+                if (x === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+            }
+            
+            canvasCtx.strokeStyle = '#e74c3c';
+            canvasCtx.lineWidth = 1;
+            canvasCtx.stroke();
+            
+            // デバッグ情報の更新
+            statusDisplay.textContent = `再生中 - サイクル位置: ${Math.round(cyclePosition*100)}%, うねり深さ: ${Math.round(currentDepth)}cents, うねりスピード: ${currentFreq.toFixed(2)}Hz`;
+            
+            animationFrameId = requestAnimationFrame(drawWaveform);
+        }
+
+        // 音を開始
+        startButton.addEventListener('click', function() {
+            if (isPlaying) return;
+            
+            try {
+                // デバッグ情報をクリア
+                debugInfo.textContent = "";
+                
+                // AudioContextの初期化
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                startTime = audioContext.currentTime;
+                
+                logDebug("AudioContextを初期化しました");
+                
+                // ゲインノード作成
+                gainNode = audioContext.createGain();
+                gainNode.gain.value = 0;
+                
+                // フィルター作成
+                filter = audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = parseFloat(filterFreqSlider.value);
+                filter.Q.value = parseFloat(filterQSlider.value);
+                
+                // 接続設定
+                if (filterEnableCheckbox.checked) {
+                    gainNode.connect(filter);
+                    filter.connect(audioContext.destination);
+                } else {
+                    gainNode.connect(audioContext.destination);
+                }
+                
+                // オシレーター1の作成と設定
+                oscillator1 = audioContext.createOscillator();
+                oscillator1.type = waveformSelect.value;
+                oscillator1.frequency.value = parseFloat(pitchSlider.value);
+                oscillator1.connect(gainNode);
+                
+                // オシレーター2の作成と設定（デチューン）
+                oscillator2 = audioContext.createOscillator();
+                oscillator2.type = waveformSelect.value;
+                oscillator2.frequency.value = parseFloat(pitchSlider.value);
+                oscillator2.detune.value = parseFloat(detuneSlider.value); // デチューン初期値を設定
+                oscillator2.connect(gainNode);
+                
+                logDebug(`オシレーター設定: 周波数=${pitchSlider.value}Hz, デチューン=${detuneSlider.value}cents, 波形=${waveformSelect.value}`);
+                
+                // エンベロープ（アタック）
+                const attackTime = parseFloat(attackSlider.value);
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + attackTime);
+                
+                // オシレーターの開始
+                oscillator1.start();
+                oscillator2.start();
+                
+                logDebug("オシレーターを開始しました");
+                
+                // ピッチうねりのLFOをセットアップ
+                setupLFO();
+                
+                // 波形描画アニメーションの開始
+                drawWaveform();
+                
+                isPlaying = true;
+                statusDisplay.textContent = "再生中";
+            } catch (error) {
+                console.error("音声の開始中にエラーが発生しました:", error);
+                statusDisplay.textContent = "エラーが発生しました: " + error.message;
+                logDebug("エラー: " + error.message);
+            }
+        });
+
+        // 音を停止
+        stopButton.addEventListener('click', function() {
+            if (!isPlaying) return;
+            
+            try {
+                // エンベロープ（リリース）
+                const releaseTime = parseFloat(releaseSlider.value);
+                gainNode.gain.setValueAtTime(gainNode.gain.value, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + releaseTime);
+                
+                // アニメーションフレームのキャンセル
+                cancelAnimationFrame(animationFrameId);
+                
+                // LFOがあれば停止
+                if (lfoNode) {
+                    lfoNode.stop();
+                }
+                
+                logDebug("停止処理を開始しました");
+                
+                // リリース後にオシレーターを停止
+                setTimeout(() => {
+                    oscillator1.stop();
+                    oscillator2.stop();
+                    isPlaying = false;
+                    statusDisplay.textContent = "停止中";
+                    logDebug("オシレーターを停止しました");
+                }, releaseTime * 1000);
+                
+                statusDisplay.textContent = "停止処理中...";
+            } catch (error) {
+                console.error("音声の停止中にエラーが発生しました:", error);
+                statusDisplay.textContent = "エラーが発生しました: " + error.message;
+                logDebug("エラー: " + error.message);
+                isPlaying = false;
+            }
+        });
+
+        // キャンバスサイズの調整
+        function resizeCanvas() {
+            waveformCanvas.width = waveformCanvas.offsetWidth;
+            waveformCanvas.height = waveformCanvas.offsetHeight;
+        }
+
+        // 初期化
+        window.addEventListener('load', function() {
+            resizeCanvas();
+            updateValueDisplays();
+            logDebug("アプリケーションを初期化しました");
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+    </script>
+</body>
+</html>

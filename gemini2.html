@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Simple 2VCO Synth with Controllable Detune and Pitch Wobble</title>
+<style>
+  body { font-family: sans-serif; }
+  .controls { margin-bottom: 1em; }
+  input[type="range"] { width: 300px; }
+</style>
+</head>
+<body>
+
+  <h1>Simple 2VCO Synth</h1>
+
+  <div class="controls">
+    <button id="startButton">Start</button>
+    <button id="stopButton">Stop</button><br><br>
+
+    <label for="pitchSlider">Pitch:</label>
+    <input type="range" id="pitchSlider" min="50" max="1000" value="440">
+    <span id="pitchValue">440 Hz</span><br><br>
+
+    <label for="detuneSlider">Detune:</label>
+    <input type="range" id="detuneSlider" min="-50" max="50" value="10">
+    <span id="detuneValue">10 cents</span><br><br>
+
+    <label for="wobbleDepthSlider">Wobble Depth:</label>
+    <input type="range" id="wobbleDepthSlider" min="0" max="300" value="150">
+    <span id="wobbleDepthValue">150 cents</span><br><br>
+
+    <label for="wobbleSpeedSlider">Wobble Speed:</label>
+    <input type="range" id="wobbleSpeedSlider" min="0.1" max="10" step="0.1" value="0.5">
+    <span id="wobbleSpeedValue">0.5 Hz</span>
+  </div>
+
+  <script>
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    let oscillator1;
+    let oscillator2;
+    let gainNode;
+    let animationFrameId;
+    let startTime = 0;
+    let isPlaying = false;
+
+    const pitchSlider = document.getElementById('pitchSlider');
+    const pitchValueDisplay = document.getElementById('pitchValue');
+    const detuneSlider = document.getElementById('detuneSlider');
+    const detuneValueDisplay = document.getElementById('detuneValue');
+    const wobbleDepthSlider = document.getElementById('wobbleDepthSlider');
+    const wobbleDepthValueDisplay = document.getElementById('wobbleDepthValue');
+    const wobbleSpeedSlider = document.getElementById('wobbleSpeedSlider');
+    const wobbleSpeedValueDisplay = document.getElementById('wobbleSpeedValue');
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+
+    const animationInterval = 1 / 60; // seconds
+
+    // エンベロープ設定 (秒単位)
+    const attackTime = 0.1;
+    const releaseTime = 0.2;
+
+    pitchSlider.addEventListener('input', () => {
+      const frequency = parseFloat(pitchSlider.value);
+      pitchValueDisplay.textContent = `${frequency.toFixed(2)} Hz`;
+      if (oscillator1) {
+        oscillator1.frequency.value = frequency;
+        oscillator2.frequency.value = frequency;
+      }
+    });
+
+    detuneSlider.addEventListener('input', () => {
+      const detune = parseFloat(detuneSlider.value);
+      detuneValueDisplay.textContent = `${detune} cents`;
+      if (oscillator2) {
+        oscillator2.detune.value = detune;
+      }
+    });
+
+    wobbleDepthSlider.addEventListener('input', () => {
+      const depth = parseFloat(wobbleDepthSlider.value);
+      wobbleDepthValueDisplay.textContent = `${depth} cents`;
+    });
+
+    wobbleSpeedSlider.addEventListener('input', () => {
+      const speed = parseFloat(wobbleSpeedSlider.value);
+      wobbleSpeedValueDisplay.textContent = `${speed.toFixed(1)} Hz`;
+    });
+
+    startButton.addEventListener('click', () => {
+      if (!isPlaying) {
+        isPlaying = true;
+        startTime = audioContext.currentTime;
+
+        // Oscillator 1
+        oscillator1 = audioContext.createOscillator();
+        oscillator1.type = 'sawtooth';
+        oscillator1.frequency.value = parseFloat(pitchSlider.value);
+
+        // Oscillator 2
+        oscillator2 = audioContext.createOscillator();
+        oscillator2.type = 'sawtooth';
+        oscillator2.frequency.value = parseFloat(pitchSlider.value);
+        oscillator2.detune.value = parseFloat(detuneSlider.value);
+
+        // Gain Node for Envelope
+        gainNode = audioContext.createGain();
+        gainNode.gain.value = 0; // Start with zero volume
+
+        oscillator1.connect(gainNode);
+        oscillator2.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator1.start();
+        oscillator2.start();
+
+        // Apply Attack Envelope
+        gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + attackTime);
+
+        // Start Pitch Wobble
+        animatePitchWobble();
+      }
+    });
+
+    stopButton.addEventListener('click', () => {
+      if (isPlaying) {
+        isPlaying = false;
+
+        // Apply Release Envelope
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + releaseTime);
+
+        // Stop oscillators after release
+        setTimeout(() => {
+          if (oscillator1) oscillator1.stop();
+          if (oscillator2) oscillator2.stop();
+          oscillator1 = null;
+          oscillator2 = null;
+          gainNode = null;
+        }, releaseTime * 1000); // Convert to milliseconds
+
+        cancelAnimationFrame(animationFrameId);
+      }
+    });
+
+    function animatePitchWobble() {
+      if (!isPlaying) return;
+
+      const elapsedTime = audioContext.currentTime - startTime;
+      const wobbleDepth = parseFloat(wobbleDepthSlider.value);
+      const wobbleSpeed = parseFloat(wobbleSpeedSlider.value);
+
+      const detuneValue = wobbleDepth * Math.sin(2 * Math.PI * wobbleSpeed * elapsedTime);
+
+      if (oscillator1) {
+        oscillator1.detune.value = detuneValue;
+      }
+
+      animationFrameId = requestAnimationFrame(animatePitchWobble);
+    }
+  </script>
+
+</body>
+</html>
