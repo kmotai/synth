@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Simple 2VCO Synth with Filter</title>
+<style>
+  body { font-family: sans-serif; }
+  .controls { margin-bottom: 1em; }
+  input[type="range"] { width: 300px; }
+</style>
+</head>
+<body>
+
+<h1>Simple 2VCO Synth with Filter</h1>
+
+<div class="controls">
+  <button id="startButton">Start</button>
+  <button id="stopButton">Stop</button><br><br>
+
+  <label for="pitchSlider">Pitch:</label>
+  <input type="range" id="pitchSlider" min="100" max="1000" value="250">
+  <span id="pitchValue">250 Hz</span><br><br>
+
+  <label for="detuneSlider">Detune:</label>
+  <input type="range" id="detuneSlider" min="-50" max="50" value="-3">
+  <span id="detuneValue">-3 cents</span><br><br>
+
+  <label for="filterType">Filter Type:</label>
+  <select id="filterType">
+    <option value="lowpass">LPF</option>
+    <option value="highpass">HPF</option>
+  </select><br><br>
+
+  <label for="cutoffSlider">Cutoff:</label>
+  <input type="range" id="cutoffSlider" min="100" max="8000" value="2000">
+  <span id="cutoffValue">2000 Hz</span><br><br>
+
+  <label for="resonanceSlider">Resonance:</label>
+  <input type="range" id="resonanceSlider" min="0.1" max="30" step="0.1" value="10">
+  <span id="resonanceValue">10</span><br><br>
+</div>
+
+<script>
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+let oscillator1, oscillator2, filter, gainNode;
+let isPlaying = false;
+
+const pitchSlider = document.getElementById('pitchSlider');
+const pitchValueDisplay = document.getElementById('pitchValue');
+const detuneSlider = document.getElementById('detuneSlider');
+const detuneValueDisplay = document.getElementById('detuneValue');
+const filterType = document.getElementById('filterType');
+const cutoffSlider = document.getElementById('cutoffSlider');
+const cutoffValueDisplay = document.getElementById('cutoffValue');
+const resonanceSlider = document.getElementById('resonanceSlider');
+const resonanceValueDisplay = document.getElementById('resonanceValue');
+const startButton = document.getElementById('startButton');
+const stopButton = document.getElementById('stopButton');
+
+// スライダー変更時の処理
+pitchSlider.addEventListener('input', () => {
+  pitchValueDisplay.textContent = `${pitchSlider.value} Hz`;
+  if (oscillator1) oscillator1.frequency.value = pitchSlider.value;
+  if (oscillator2) oscillator2.frequency.value = pitchSlider.value;
+});
+
+detuneSlider.addEventListener('input', () => {
+  detuneValueDisplay.textContent = `${detuneSlider.value} cents`;
+  if (oscillator2) oscillator2.detune.value = detuneSlider.value;
+});
+
+filterType.addEventListener('change', () => {
+  if (filter) filter.type = filterType.value;
+});
+
+cutoffSlider.addEventListener('input', () => {
+  cutoffValueDisplay.textContent = `${cutoffSlider.value} Hz`;
+  if (filter) filter.frequency.value = cutoffSlider.value;
+});
+
+resonanceSlider.addEventListener('input', () => {
+  resonanceValueDisplay.textContent = `${resonanceSlider.value}`;
+  if (filter) filter.Q.value = resonanceSlider.value;
+});
+
+startButton.addEventListener('click', () => {
+  if (!isPlaying) {
+    isPlaying = true;
+
+    oscillator1 = audioContext.createOscillator();
+    oscillator2 = audioContext.createOscillator();
+    filter = audioContext.createBiquadFilter();
+    gainNode = audioContext.createGain();
+
+    oscillator1.type = 'sawtooth';
+    oscillator2.type = 'sawtooth';
+
+    oscillator1.frequency.value = pitchSlider.value;
+    oscillator2.frequency.value = pitchSlider.value;
+    oscillator2.detune.value = detuneSlider.value;
+
+    // Startボタンが押された際に、現在のフィルタータイプを設定
+    filter.type = filterType.value;
+    filter.frequency.value = cutoffSlider.value;
+    filter.Q.value = resonanceSlider.value;
+
+    gainNode.gain.value = 1;
+
+    oscillator1.connect(filter);
+    oscillator2.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator1.start();
+    oscillator2.start();
+  }
+});
+
+stopButton.addEventListener('click', () => {
+  if (isPlaying) {
+    isPlaying = false;
+    oscillator1.stop();
+    oscillator2.stop();
+    oscillator1 = null;
+    oscillator2 = null;
+    filter = null;
+    gainNode = null;
+  }
+});
+</script>
+
+</body>
+</html>
